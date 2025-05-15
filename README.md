@@ -59,7 +59,7 @@ Create the required CDK stack entrypoint at `stack/index.ts`. You should adapt t
 ```ts
 // stack/index.ts
 import { App } from "aws-cdk-lib";
-import { NuxtStack, NuxtProps } from "@thunderso/cdk-nuxt";
+import { NuxtStack, type NuxtProps } from "@thunderso/cdk-nuxt";
 
 const nuxtApp: NuxtProps = {
   env: {
