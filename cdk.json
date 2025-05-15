@@ -1,0 +1,5 @@
+{
+    "context": {
+        "@aws-cdk/customresources:installLatestAwsSdkDefault": false
+    }
+}
