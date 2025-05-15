@@ -1,6 +1,6 @@
 {
   "name": "@thunderso/cdk-nuxt",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Deploy Nuxt 3 on Lambda and S3 using AWS CDK",
   "tags": [
     "aws",
