@@ -59,9 +59,9 @@ Create the required CDK stack entrypoint at `stack/index.ts`. You should adapt t
 ```ts
 // stack/index.ts
 import { App } from "aws-cdk-lib";
-import { NuxtStack, type nuxtApp } from "@thunderso/cdk-nuxt";
+import { NuxtStack, NuxtProps } from "@thunderso/cdk-nuxt";
 
-const nuxtApp: nuxtApp = {
+const nuxtApp: NuxtProps = {
   env: {
     account: 'your-account-id',
     region: 'us-east-1'
@@ -151,7 +151,7 @@ Add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` as repository secrets in Git
 
 ```ts
 // stack/index.ts
-const nuxtApp: nuxtApp = {
+const nuxtApp: NuxtProps = {
   // ... other props
 
   // Optional: Domain settings
@@ -169,7 +169,7 @@ Each configuration property provides a means to fine-tune your function’s perf
 
 ```ts
 // stack/index.ts
-const nuxtApp: nuxtApp = {
+const nuxtApp: NuxtProps = {
   // ... other props
   
   serverProps: {
@@ -226,7 +226,7 @@ You can define environment variables for your Nuxt server Lambda function using 
 
 ```ts
 // stack/index.ts
-const nuxtApp: nuxtApp = {
+const nuxtApp: NuxtProps = {
   // ... other props
 
   serverProps: {
@@ -281,7 +281,7 @@ Reference the `Dockerfile` in your stack configuration:
 
 ```ts
 // stack/index.ts
-const nuxtApp: nuxtApp = {
+const nuxtApp: NuxtProps = {
   // ... other props
   
   serverProps: {
@@ -304,7 +304,7 @@ You can control which files and folders from your Nuxt build output directory (`
 
 ```ts
 // stack/index.ts
-const nuxtApp: nuxtApp = {
+const nuxtApp: NuxtProps = {
   // ... other props
 
   buildProps: {
@@ -327,7 +327,7 @@ const nuxtApp: nuxtApp = {
 You can specify a custom error page to handle `404 Not Found` errors by setting the `errorPagePath` property. This path should be relative to your application's output directory.
 
 ```ts stack/index.ts
-const nuxtApp: nuxtApp = {
+const nuxtApp: NuxtProps = {
   // ... other props
 
   // Optional: Custom error page
@@ -341,7 +341,7 @@ You can add custom HTTP response headers to all responses served by CloudFront b
 
 ```ts
 // stack/index.ts
-const nuxtApp: nuxtApp = {
+const nuxtApp: NuxtProps = {
   // ... other props
 
   headers: {
@@ -368,7 +368,7 @@ You can fine-tune CloudFront's caching behavior by specifying which `headers`, `
 
 ```ts
 // stack/index.ts
-const nuxtApp: nuxtApp = {
+const nuxtApp: NuxtProps = {
   // ... other props
 
   // Customize cache behavior
