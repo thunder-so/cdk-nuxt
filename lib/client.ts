@@ -6,7 +6,7 @@ import { Role, PolicyStatement, Effect, ServicePrincipal, AnyPrincipal, ManagedP
 import { Bucket, BlockPublicAccess, ObjectOwnership, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import { BucketDeployment, CacheControl, Source, StorageClass } from "aws-cdk-lib/aws-s3-deployment";
 import { Distribution, CachePolicy, SecurityPolicyProtocol, HttpVersion, ResponseHeadersPolicy, HeadersFrameOption, HeadersReferrerPolicy, type BehaviorOptions, AllowedMethods, ViewerProtocolPolicy, CacheCookieBehavior, CacheHeaderBehavior, CacheQueryStringBehavior, CfnOriginAccessControl, CachedMethods, LambdaEdgeEventType, AccessLevel, experimental, IOrigin } from "aws-cdk-lib/aws-cloudfront";
-import { HttpOrigin, OriginGroup, S3BucketOrigin, S3StaticWebsiteOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import { HttpOrigin, OriginGroup, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { AaaaRecord, ARecord, HostedZone, type IHostedZone, RecordTarget } from "aws-cdk-lib/aws-route53";

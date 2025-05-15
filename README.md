@@ -82,7 +82,43 @@ new NuxtStack(
 );
 ```
 
+Update your `nuxt.config.ts` to include the optimal settings for deployment on AWS:
+
+```ts
+// nuxt.config.ts
+export default defineNuxtConfig({
+  /// ... other configs
+
+  vite: {
+    vue: {
+      script: {
+        defineModel: true,
+        propsDestructure: true,
+      },
+    },
+    build: {
+        target: 'esnext',
+    }
+  },
+
+  nitro: {
+    preset: 'aws-lambda',
+    esbuild: {
+        options: {
+            target: 'esnext'
+        },
+    }
+  },
+});
+```
+
+- Vite is a fast frontend build tool that improves development speed and optimizes builds, especially for frameworks like Vue and Nuxt. The vite options enable advanced Vue features (`defineModel`, `propsDestructure`), set the build target to modern JavaScript (`esnext`),
+
+- Nitro is Nuxt's server engine, responsible for building and deploying server-side code. The nitro options set the deployment target to AWS Lambda (`preset: 'aws-lambda'`) and ensure server code is also built for modern JavaScript (`esnext`), improving performance and compatibility with AWS environments.
+
 ## Deploy
+
+Run `npm run build` before you deploy.
 
 By running the following script, the CDK stack will be deployed to AWS.
 
