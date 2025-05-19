@@ -36,7 +36,7 @@ export interface NuxtProps extends StackProps {
     /**
      * Debug
      */
-    readonly debug: boolean;
+    readonly debug?: boolean;
 
     /**
      * The AWS environment (account/region) where this stack will be deployed.

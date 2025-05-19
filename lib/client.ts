@@ -38,17 +38,6 @@ export class ClientConstruct extends Construct {
     // Set the resource prefix
     this.resourceIdPrefix = `${props.application}-${props.service}-${props.environment}`.substring(0, 42);
 
-    // Create the Origin Access Control
-    this.originAccessControl = new CfnOriginAccessControl(this, 'OAC', {
-      originAccessControlConfig: {
-        name: `${this.resourceIdPrefix}-OAC`,
-        description: `Origin Access Control for ${this.resourceIdPrefix}`,
-        originAccessControlOriginType: 's3',
-        signingBehavior: 'always',
-        signingProtocol: 'sigv4',
-      },
-    });
-
     // Create the static asset bucket
     this.staticAssetsBucket = this.createStaticAssetsBucket(props);
 
@@ -120,13 +109,24 @@ export class ClientConstruct extends Construct {
       autoDeleteObjects: false
     });
 
+    // Create the Origin Access Control
+    this.originAccessControl = new CfnOriginAccessControl(this, 'OAC', {
+      originAccessControlConfig: {
+        name: `${this.resourceIdPrefix}-OAC`,
+        description: `Origin Access Control for ${this.resourceIdPrefix}`,
+        originAccessControlOriginType: 's3',
+        signingBehavior: 'always',
+        signingProtocol: 'sigv4',
+      },
+    });
+    
     this.s3Origin = S3BucketOrigin.withOriginAccessControl(bucket, {
       originId: `${this.resourceIdPrefix}-s3origin`,
       originAccessLevels: [ AccessLevel.READ ],
       originAccessControlId: this.originAccessControl?.attrId,
     });
 
-    // Update the bucket policy to allow access from CloudFront
+    // Update the bucket policy to allow access from CloudFront via OAC
     bucket.addToResourcePolicy(
       new PolicyStatement({
         effect: Effect.ALLOW,
