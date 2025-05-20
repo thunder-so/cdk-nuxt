@@ -64,7 +64,7 @@ import { NuxtStack, type NuxtProps } from "@thunderso/cdk-nuxt";
 const nuxtApp: NuxtProps = {
   env: {
     account: 'your-account-id',
-    region: 'us-east-1'
+    region: 'us-west-2'
   },
   application: 'your-application-id',
   service: 'your-service-id',
@@ -176,26 +176,31 @@ Add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` as repository secrets in Git
 
 1. [Create a hosted zone in Route53](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/AboutHZWorkingWith.html) for the desired domain, if you don't have one yet.
 
-  This is required to create DNS records for the domain to make the app publicly available on that domain. On the hosted zone details you should see the `Hosted zone ID` of the hosted zone.
+This is required to create DNS records for the domain to make the app publicly available on that domain. On the hosted zone details you should see the `Hosted zone ID` of the hosted zone.
 
 2. [Request a public global certificate in the AWS Certificate Manager (ACM)](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request-public.html) for the desired domain in `us-east-1` *(global)* and validate it, if you don't have one yet.
 
-  This is required to provide the app via HTTPS on the public internet. Take note of the displayed `ARN` for the certificate. 
+This is required to provide the app via HTTPS on the public internet. Take note of the displayed `ARN` for the certificate.
+
+3. [Request a regional certificate in ACM](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request.html) for the same domain in the **same region as your CDK stack**. This is required for API Gateway.
 
 > [!IMPORTANT]
-> The certificate must be issued in `us-east-1` *(global)* regardless of the region used for the app itself as it will be attached to the CloudFront distribution which works globally.
+> The `globalCertificateArn` certificate must be issued in `us-east-1` *(global)* regardless of the region used for the app itself as it will be attached to the CloudFront distribution which works globally.
+> The `regionalCertificateArn` certificate must be issued in the same region as your stack.
 
 ```ts
 // stack/index.ts
 const nuxtApp: NuxtProps = {
   // ... other props
 
-  // Optional: Domain settings
+  // Domain settings
   // - create a hosted zone for your domain in Route53
-  // - issue a global tls certificate in us-east-1 in AWS ACM
+  // - issue a global TLS certificate in us-east-1 in AWS ACM
+  // - issue a regional TLS certificate in the same region as your stack
   domain: 'sub.example.com',
   hostedZoneId: 'XXXXXXXXXXXXXXX',
-  globalCertificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/abcd1234-abcd-1234-abcd-1234abcd1234',
+  globalCertificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/abcd1234-abcd-1234-abcd-1234abcd1234', // must be in us-east-1
+  regionalCertificateArn: 'arn:aws:acm:us-west-2:123456789012:certificate/efgh5678-efgh-5678-efgh-5678efgh5678', // must match your stack's region
 };
 ```
 
@@ -205,6 +210,8 @@ Each configuration property provides a means to fine-tune your function’s perf
 
 ```ts
 // stack/index.ts
+import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
+
 const nuxtApp: NuxtProps = {
   // ... other props
   

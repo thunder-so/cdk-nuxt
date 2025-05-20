@@ -146,7 +146,7 @@ export class ClientConstruct extends Construct {
   }
 
   /**
-   * Creates the CloudFront function that fallbacks the request URL to remove the trailing slash.
+   * Creates the CloudFront function that fallbacks the request URL
    *
    * @private
    */
