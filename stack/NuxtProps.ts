@@ -26,9 +26,21 @@ export interface ServerProps {
   readonly memorySize?: number;
   readonly timeout?: number;
   readonly tracing?: boolean;
-  readonly environment?: Array<{ [key: string]: string; }>;
+  readonly reservedConcurrency?: number;
+  readonly provisionedConcurrency?: number;
+  readonly variables?: Array<{ [key: string]: string; }>;
+  /**
+   * Create a secret with AWS Secrets Manager and pass them to the Lambda function as environment variables.
+   * The library will create permission for Lambda to access the secret value.
+   * 
+   *   secrets: [
+   *     { key: 'PUBLIC_EXAMPLE', resource: 'your-secret-arn' }
+   *   ]
+   */
+  readonly secrets?: { key: string; resource: string; }[];
   readonly dockerFile?: string;
   readonly dockerBuildArgs?: string[];
+  readonly keepWarm?: boolean;
 }
 
 export interface NuxtProps extends StackProps {

@@ -1,17 +1,14 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { Aws, Duration, RemovalPolicy, CfnOutput } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { Role, PolicyStatement, Effect, ServicePrincipal, AnyPrincipal, ManagedPolicy } from "aws-cdk-lib/aws-iam";
+import { PolicyStatement, Effect, ServicePrincipal, AnyPrincipal } from "aws-cdk-lib/aws-iam";
 import { Bucket, BlockPublicAccess, ObjectOwnership, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import { BucketDeployment, CacheControl, Source, StorageClass } from "aws-cdk-lib/aws-s3-deployment";
 import { Distribution, CachePolicy, SecurityPolicyProtocol, HttpVersion, ResponseHeadersPolicy, HeadersFrameOption, HeadersReferrerPolicy, type BehaviorOptions, AllowedMethods, ViewerProtocolPolicy, CacheCookieBehavior, CacheHeaderBehavior, CacheQueryStringBehavior, CfnOriginAccessControl, CachedMethods, LambdaEdgeEventType, AccessLevel, experimental, IOrigin } from "aws-cdk-lib/aws-cloudfront";
-import { HttpOrigin, OriginGroup, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import { HttpOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { AaaaRecord, ARecord, HostedZone, type IHostedZone, RecordTarget } from "aws-cdk-lib/aws-route53";
 import { CloudFrontTarget } from "aws-cdk-lib/aws-route53-targets";
-import { Runtime, Code } from 'aws-cdk-lib/aws-lambda';
 import { NuxtProps } from '../stack/NuxtProps';
 
 export interface ServerProps {
@@ -27,7 +24,6 @@ export class ClientConstruct extends Construct {
   public cdn: Distribution;
   private s3Origin: IOrigin;
   public originAccessControl: CfnOriginAccessControl|undefined;
-  private fallbackFunction: experimental.EdgeFunction|undefined;
 
   constructor(scope: Construct, id: string, nuxtProps: NuxtProps, serverProps: ServerProps) {
     super(scope, id);
@@ -40,9 +36,6 @@ export class ClientConstruct extends Construct {
 
     // Create the static asset bucket
     this.staticAssetsBucket = this.createStaticAssetsBucket(props);
-
-    // Create the fallback Lambda@edge
-    this.fallbackFunction = this.createEdgeLambda(props);
 
     // Create the CDN
     this.cdn = this.createCloudFrontDistribution(props);
@@ -143,71 +136,6 @@ export class ClientConstruct extends Construct {
     );
 
     return bucket;
-  }
-
-  /**
-   * Creates the CloudFront function that fallbacks the request URL
-   *
-   * @private
-   */
-  private createEdgeLambda(props: ClientProps): experimental.EdgeFunction {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-
-    const edgeFunction =  new experimental.EdgeFunction(this, 'FallbackEdgeFunction', {
-      functionName: `${this.resourceIdPrefix}-fallback-edge`,
-      runtime: props.serverProps?.runtime || Runtime.NODEJS_20_X,
-      handler: 'index.handler',
-      memorySize: 128,
-      code: Code.fromInline(`
-        'use strict';
-
-        exports.handler = (event, context, callback) => {
-          const response = event.Records[0].cf.response;
-          const request = event.Records[0].cf.request;
-          const host = event.Records[0].cf.config.distributionDomainName;
-
-          // http origin returned a 404 for path, redirect to s3 origin
-          if (response.status == '404') {
-            let redirectUrl;
-    
-            if (request.uri.endsWith('/')) {
-              redirectUrl = 'https://' + host + request.uri + 'index.html';
-            } else if (!request.uri.includes('.')) {
-              redirectUrl = 'https://' + host + request.uri + '/index.html';
-            }
-            
-            // Return a 302 redirect response
-            callback(null, {
-              status: '302',
-              statusDescription: 'Found',
-              headers: {
-                'Location': [{ key: 'Location', value: redirectUrl }],
-              }
-            });
-
-          // S3 origin returned 403 Access Denied for index.html, return a true 404
-          } else if (response.status == '403') {
-            
-            callback(null, {
-              status: '404',
-              statusDescription: 'Not Found',
-              headers: response.headers,
-              body: '<h1>404 Not Found</h1>',
-            });
-            
-          } else {
-            // passthrough all else
-            callback(null, response);
-          }
-        };
-      `),
-    });
-
-    // Grant the Edge Lambda permission to read from the S3 bucket
-    this.staticAssetsBucket.grantRead(edgeFunction);
-
-    return edgeFunction;
   }
 
   /**
@@ -316,17 +244,6 @@ export class ClientConstruct extends Construct {
     });
 
     /**
-     * ORIGIN GROUP
-     * 
-     * Combines the HTTP Origin (API Gateway/Lambda) and S3 Origin with failover capability
-     */
-    // const originGroup = new OriginGroup({
-    //   primaryOrigin: props.httpOrigin,
-    //   fallbackOrigin: this.s3Origin,
-    //   fallbackStatusCodes: [404],
-    // });
-
-    /**
      * ROUTE BEHAVIORS
      * 
      * Creates a behavior for the CloudFront distribution to route incoming web requests
@@ -341,12 +258,6 @@ export class ClientConstruct extends Construct {
       cachePolicy: serverCachePolicy,
       viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       responseHeadersPolicy: responseHeadersPolicy,
-      edgeLambdas: [
-        ...(this.fallbackFunction ? [{
-          eventType: LambdaEdgeEventType.ORIGIN_RESPONSE,
-          functionVersion: this.fallbackFunction.currentVersion,
-        }] : []),
-      ],
     };
 
     const additionalBehaviors: Record<string, BehaviorOptions> = {};
@@ -367,12 +278,6 @@ export class ClientConstruct extends Construct {
       cachedMethods: CachedMethods.CACHE_GET_HEAD_OPTIONS,
       cachePolicy: CachePolicy.CACHING_OPTIMIZED,
       viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-      edgeLambdas: [
-        ...(this.fallbackFunction ? [{
-          eventType: LambdaEdgeEventType.ORIGIN_RESPONSE,
-          functionVersion: this.fallbackFunction.currentVersion,
-        }] : []),
-      ],
     };
     
     // loop through the server paths and attach api behavior - default to /api/*

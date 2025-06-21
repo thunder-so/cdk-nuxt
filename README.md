@@ -43,10 +43,10 @@ This package uses the `npm` package manager and is an ES6+ Module.
 
 Navigate to your project directory and install the package and its required dependencies. 
 
-Your `package.json` must also contain `tsx` and the latest version of `aws-cdk-lib`:
+Your `package.json` must also contain the latest `tsx` and `cdk-nuxt`:
 
 ```bash
-npm i tsx aws-cdk-lib @thunderso/cdk-nuxt --save-dev
+npm i tsx @thunderso/cdk-nuxt --save-dev
 ```
 
 ## Configuration
@@ -58,8 +58,7 @@ Create the required CDK stack entrypoint at `stack/index.ts`. You should adapt t
 
 ```ts
 // stack/index.ts
-import { App } from "aws-cdk-lib";
-import { NuxtStack, type NuxtProps } from "@thunderso/cdk-nuxt";
+import { Cdk, NuxtStack, type NuxtProps } from "@thunderso/cdk-nuxt";
 
 const nuxtApp: NuxtProps = {
   env: {
@@ -76,7 +75,7 @@ const nuxtApp: NuxtProps = {
 };
 
 new NuxtStack(
-    new App(), 
+    new Cdk.App(), 
     `${nuxtApp.application}-${nuxtApp.service}-${nuxtApp.environment}-stack`, 
     nuxtApp
 );
@@ -107,7 +106,10 @@ export default defineNuxtConfig({
         options: {
             target: 'esnext'
         },
-    }
+    },
+    experimental: {
+      wasm: true
+    },
   },
 });
 ```
@@ -123,7 +125,7 @@ Run `npm run build` before you deploy.
 By running the following script, the CDK stack will be deployed to AWS.
 
 ```bash
-npx cdk deploy --require-approval never --all --app="npx tsx stack/index.ts" 
+npx cdk deploy --all --app="npx tsx stack/index.ts" 
 ```
 
 ## Destroy the Stack
@@ -131,7 +133,7 @@ npx cdk deploy --require-approval never --all --app="npx tsx stack/index.ts"
 If you want to destroy the stack and all its resources (including storage, e.g., access logs), run the following script:
 
 ```bash
-npx cdk destroy --require-approval never --all --app="npx tsx stack/index.ts" 
+npx cdk destroy --all --app="npx tsx stack/index.ts" 
 ```
 
 
@@ -222,6 +224,7 @@ const nuxtApp: NuxtProps = {
     timeout: 10,
     tracing: false,
     exclude: ['**/*.ts', '**/*.map'],
+    keepWarm: true,
   },
 };
 
@@ -263,9 +266,26 @@ Lists the file patterns that should be excluded from the Lambda deployment packa
 - **Usage Example**: `exclude: ['*.test.js', 'README.md']`
 - **Default**: []
 
+### `keepWarm`
+Enables an EventBridge rule to invoke the Lambda function every 5 minutes, helping to prevent cold starts by keeping the function warm.
+- **Type**: `boolean`
+- **Default**: `false`
+- **Usage Example**: `keepWarm: true`
+
+
 ## Environment variables
 
-You can define environment variables for your Nuxt server Lambda function using the `serverProps.environment` property in your stack configuration. This allows you to inject runtime configuration, secrets, or API keys into your Nuxt application at deployment time.
+Pass environment variables to your lambda function by:
+
+1. `variables`: Array of key-value pairs for plain environment variables.
+
+2. `secrets`: Array of objects with `key` and `resource` (Secrets Manager ARN). The library automatically adds permissions for Lambda to read these secrets.
+
+To create a plaintext secret in AWS Secrets Manager using the AWS CLI:
+
+```bash
+aws secretsmanager create-secret --name "your-secret-name" --secret-string "your-secret-value"
+```
 
 ```ts
 // stack/index.ts
@@ -275,52 +295,28 @@ const nuxtApp: NuxtProps = {
   serverProps: {
     // ...other server props
 
-    environment: [
+    variables: [
       { NUXT_API_URL: 'https://api.example.com' },
       { NUXT_PUBLIC_ANALYTICS_ID: 'UA-XXXXXX' }
+    ],
+
+    secrets: [
+      { 
+        key: 'API_URL', 
+        resource: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:/my-app/API_URL-abc123' 
+      },
+      { 
+        key: 'API_KEY', 
+        resource: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:/my-app/API_KEY-def456' 
+      },
     ],
   },
 };
 ```
 
-> [!NOTE]
-> Be cautious when using environment variables. Ensure that any API keys or secrets included are safe to commit to your repository.
+## Scaling Properties
 
-
-# Advanced: Using Docker Container
-
-If your Nuxt server bundle exceeds the AWS Lambda deployment package size limit (250 MB unzipped), you can deploy your application as a Lambda function packaged in a Docker container. 
-
-Lambda with container images supports up to 10 GB, making it suitable for large Nuxt server bundles and dependencies.
-
-When to use:
-
-- Your `.output/server` directory or dependencies are too large for a standard Lambda deployment.
-- You need custom OS-level dependencies or binaries.
-- You want full control over the runtime environment.
-
-Create a `Dockerfile` in your project directory. 
-
-```Dockerfile
-FROM public.ecr.aws/lambda/nodejs:22
-
-# Set working directory to /var/task/
-WORKDIR ${LAMBDA_TASK_ROOT}
-
-# Copy .output/server directory contents to /var/task/
-COPY ./ ./
-
-# Lambda function handler
-ENV HOST=0.0.0.0
-ENV PORT=3000
-EXPOSE 3000
-
-CMD ["index.handler"]
-```
-
-The `.output/server` directory is used as the context for the container.
-
-Reference the `Dockerfile` in your stack configuration:
+When configuring AWS Lambda functions, understanding scaling properties is essential for efficient resource management and cost optimization. The two primary scaling properties you can configure are `reservedConcurrency` and `provisionedConcurrency`.
 
 ```ts
 // stack/index.ts
@@ -328,17 +324,25 @@ const nuxtApp: NuxtProps = {
   // ... other props
   
   serverProps: {
-    dockerFile: 'Dockerfile'
-
-    // ...other server props
-    // note: runtime will be ignored when using Docker
+    // ... other props
+    reservedConcurrency: 5,
+    provisionedConcurrency: 10,
   },
 
 };
-
 ```
 
-Deploy as usual. CDK will build the Docker image and deploy it to AWS Lambda as a container image.
+### `reservedConcurrency`
+Reserved concurrency sets a limit on the number of instances of the function that can run simultaneously. It ensures that your function has access to a specified amount of concurrent executions, preventing it from being throttled if account-level concurrency limits are reached.
+- **Use Case**: This is useful when you want to have predictable execution patterns or ensure other functions don't consume all available concurrency.
+- **Example**: `reservedConcurrency: 5`
+
+### `provisionedConcurrency`
+Provisioned concurrency keeps a set of pre-initialized environments ready to respond immediately to incoming requests. This helps in reducing latency and eliminating cold starts when the function is triggered.
+- **Use Case**: Ideal for latency-sensitive applications where response time is critical.
+- **Example**: `provisionedConcurrency: 10`
+
+While both reserved and provisioned concurrency deal with execution limits, they serve different purposes. Reserved concurrency guarantees a portion of the total function pool across your AWS account, while provisioned concurrency is specifically about warming up a set number of function instances to achieve low-latency execution.
 
 
 # Controlling S3 Asset Uploads
@@ -432,6 +436,60 @@ If neither `allowQueryParams` nor `denyQueryParams` are specified, all query par
 
 > [!NOTE]
 > The `allowQueryParams` and `denyQueryParams` properties are mutually exclusive. If both are provided, denyQueryParams will be ignored.
+
+
+# Advanced: Using Docker Container
+
+If your Nuxt server bundle exceeds the AWS Lambda deployment package size limit (250 MB unzipped), you can deploy your application as a Lambda function packaged in a Docker container. 
+
+Lambda with container images supports up to 10 GB, making it suitable for large Nuxt server bundles and dependencies.
+
+When to use:
+
+- Your `.output/server` directory or dependencies are too large for a standard Lambda deployment.
+- You need custom OS-level dependencies or binaries.
+- You want full control over the runtime environment.
+
+Create a `Dockerfile` in your project directory. 
+
+```Dockerfile
+FROM public.ecr.aws/lambda/nodejs:22
+
+# Set working directory to /var/task/
+WORKDIR ${LAMBDA_TASK_ROOT}
+
+# Copy .output/server directory contents to /var/task/
+COPY ./ ./
+
+# Lambda function handler
+ENV HOST=0.0.0.0
+ENV PORT=3000
+EXPOSE 3000
+
+CMD ["index.handler"]
+```
+
+The `.output/server` directory is used as the context for the container.
+
+Reference the `Dockerfile` in your stack configuration:
+
+```ts
+// stack/index.ts
+const nuxtApp: NuxtProps = {
+  // ... other props
+  
+  serverProps: {
+    dockerFile: 'Dockerfile'
+
+    // ...other server props
+    // note: runtime will be ignored when using Docker
+  },
+
+};
+
+```
+
+Deploy as usual. CDK will build the Docker image and deploy it to AWS Lambda as a container image.
 
 
 # Troubleshooting

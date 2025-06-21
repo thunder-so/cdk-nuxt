@@ -5,12 +5,15 @@ import path from 'path';
 import { Aws, Duration } from "aws-cdk-lib";
 import { Construct } from 'constructs';
 import { RetentionDays } from 'aws-cdk-lib/aws-logs';
-import { Function, Runtime, Architecture, Code, Tracing, DockerImageCode, DockerImageFunction } from 'aws-cdk-lib/aws-lambda';
+import { Function, Runtime, Architecture, Code, Tracing, DockerImageCode, DockerImageFunction, Alias } from 'aws-cdk-lib/aws-lambda';
 import { HttpApi, HttpMethod, DomainName, EndpointType, SecurityPolicy } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { HttpOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { OriginProtocolPolicy } from 'aws-cdk-lib/aws-cloudfront';
+import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import { Rule, Schedule, RuleTargetInput } from 'aws-cdk-lib/aws-events';
+import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
 import { NuxtProps } from '../stack/NuxtProps';
 
 export class ServerConstruct extends Construct {
@@ -27,7 +30,7 @@ export class ServerConstruct extends Construct {
     // Set the resource prefix
     this.resourceIdPrefix = `${props.application}-${props.service}-${props.environment}`.substring(0, 42);
     this.rootDir = props.rootDir || './';
-    this.codeDir = `${this.rootDir}${props.serverProps?.codeDir || '.output/server'}`;
+    this.codeDir = path.join(this.rootDir, props.serverProps?.codeDir || '.output/server');
 
     // Include the specified files and directories to output directory
     if (props.serverProps?.include && props.serverProps?.include.length > 0) {
@@ -39,10 +42,24 @@ export class ServerConstruct extends Construct {
     this.lambdaFunction = props.serverProps?.dockerFile
       ? this.createContainerLambdaFunction(props)
       : this.createLambdaFunction(props);
+
+    // Handle provisioned concurrency if specified
+    if (props.serverProps?.provisionedConcurrency !== undefined) {
+      // Provisioned concurrency requires the creation of a version and an alias
+      const version = this.lambdaFunction.currentVersion;
+      new Alias(this, 'LambdaAlias', {
+        aliasName: 'live',
+        version: version,
+        provisionedConcurrentExecutions: props.serverProps.provisionedConcurrency,
+      });
+    }
    
     // Include the environment variables in the Lambda function
-    if (props.serverProps?.environment && props.serverProps?.environment?.length > 0) {
-      this.addEnvironmentVariables(props.serverProps?.environment || {});
+    if (props.serverProps?.variables && props.serverProps?.variables?.length > 0) {
+      this.addEnvironmentVariables(props.serverProps?.variables || {});
+    }
+    if (props.serverProps?.secrets && props.serverProps?.secrets?.length > 0) {
+      this.addSecrets(props.serverProps?.secrets || {});
     }
 
     // Create the API gateway to make the Lambda function publicly available
@@ -50,6 +67,11 @@ export class ServerConstruct extends Construct {
 
     // Create the API gateway origin to route incoming requests to the Lambda function
     this.httpOrigin = this.createHttpOrigin(props);
+
+    // Create a scheduled rule to ping the Lambda function every 5 minutes
+    if (props.serverProps?.keepWarm) {
+      this.createPingRule(props);
+    }
   }
 
   /**
@@ -107,6 +129,7 @@ export class ServerConstruct extends Construct {
         NODE_OPTIONS: '--enable-source-maps',
         NITRO_PRESET: 'aws-lambda',
       },
+      reservedConcurrentExecutions: props.serverProps?.reservedConcurrency,
     });
 
     return lambdaFunction; 
@@ -138,6 +161,7 @@ export class ServerConstruct extends Construct {
             NODE_OPTIONS: '--enable-source-maps',
             NITRO_PRESET: 'aws-lambda'
         },
+        reservedConcurrentExecutions: props.serverProps?.reservedConcurrency,
     });
 
     return lambdaFunction;
@@ -154,6 +178,28 @@ export class ServerConstruct extends Construct {
       Object.entries(envVar).forEach(([key, value]) => {
         this.lambdaFunction.addEnvironment(key, value);
       });
+    });
+  }
+
+  /**
+   * Add secrets from AWS Secrets Manager to the Lambda function environment.
+   * @param secrets Array of objects with { key, resource } where resource is the ARN of the secret.
+   *
+   * @private
+   */
+  private addSecrets(secrets: Array<{ key: string; resource: string }>): void {
+    secrets.forEach(secret => {
+      const importedSecret = Secret.fromSecretCompleteArn(
+        this,
+        `Secret-${secret.key}`,
+        secret.resource
+      );
+
+      // Add the secret value as an environment variable
+      this.lambdaFunction.addEnvironment(secret.key, importedSecret.secretValue.unsafeUnwrap());
+
+      // Grant Lambda permission to read the secret
+      importedSecret.grantRead(this.lambdaFunction);
     });
   }
 
@@ -210,4 +256,36 @@ export class ServerConstruct extends Construct {
     });
   }
 
+  /**
+   * Creates a scheduled rule to ping Lambda function every 5 minutes in order to keep it warm
+   * and speed up initial SSR requests.
+   *
+   * @private
+   */
+  private createPingRule(props: NuxtProps): void {
+    const fakeApiGatewayEventData = {
+        "version": "2.0",
+        "routeKey": "GET /{proxy+}",
+        "rawPath": "/",
+        "rawQueryString": "",
+        "headers": {},
+        "requestContext": {
+            "http": {
+                "method": "GET",
+                "path": "/",
+                "protocol": "HTTP/1.1"
+            }
+        }
+    };
+
+    new Rule(this, `PingRule`, {
+        ruleName: `${this.resourceIdPrefix}-pinger`,
+        description: `Pings the Lambda function of the ${this.resourceIdPrefix} app every 5 minutes to keep it warm.`,
+        enabled: true,
+        schedule: Schedule.rate(Duration.minutes(5)),
+        targets: [new LambdaFunction(this.lambdaFunction, {
+            event: RuleTargetInput.fromObject(fakeApiGatewayEventData)
+        })],
+    });
+  }
 }
