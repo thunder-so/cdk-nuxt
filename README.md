@@ -7,16 +7,19 @@
     <a href="https://www.npmjs.com/package/@thunderso/cdk-nuxt"><img alt="License" src="https://img.shields.io/npm/l/@thunderso/cdk-nuxt.svg" /></a>
 </p>
 
-Deploy full-stack Nuxt applications on AWS with CI/CD.
+Deploy full-stack Nuxt applications on AWS and CI/CD with GitHub Actions.
 
-AWS resources:
 
-- Server-side rendering (SSR) with [Lambda](https://aws.amazon.com/lambda/) for dynamic content generation
-- Fast responses from [CloudFront](https://aws.amazon.com/cloudfront/)
+## Features
+
+- Server-side rendering (SSR) with [Lambda](https://aws.amazon.com/lambda/) for dynamic content generation and API
+- Automatic upload of the static assets to [S3](https://aws.amazon.com/s3/) with optimized caching rules
+- Fast responses for static assets from CDN using [CloudFront](https://aws.amazon.com/cloudfront/)
 - Automatic upload of the build files and static assets to [S3](https://aws.amazon.com/s3/) with optimized caching rules
 - Publicly available by a custom domain (or subdomain) via [Route53](https://aws.amazon.com/route53/) and SSL via [Certificate Manager](https://aws.amazon.com/certificate-manager/)
 - Build and deploy with [Github Actions](https://docs.github.com/en/actions)
 - Optional: Use Dockerfile to use container image Lambda
+
 
 ## Prerequisites
 
@@ -49,12 +52,26 @@ Your `package.json` must also contain the latest `tsx` and `cdk-nuxt`:
 npm i tsx @thunderso/cdk-nuxt --save-dev
 ```
 
-## Configuration
 
-Create the required CDK stack entrypoint at `stack/index.ts`. You should adapt the file to your project's needs.
+## Setup
+
+1. Login into the AWS console and note the `Account ID`. You will need it in the configuration step.
+
+2. Run the following commands to create the required CDK stack entrypoint at `stack/index.ts`. 
+
+```bash
+mkdir stack
+cd stack
+touch index.ts 
+```
+
+You should adapt the file to your project's needs.
 
 > [!NOTE]
-> Use different filenames such as `production.ts` and `testing.ts` for environments.
+> Use different filenames such as `production.ts` and `dev.ts` for environments.
+
+
+## Configuration
 
 ```ts
 // stack/index.ts
@@ -118,7 +135,8 @@ export default defineNuxtConfig({
 
 - Nitro is Nuxt's server engine, responsible for building and deploying server-side code. The nitro options set the deployment target to AWS Lambda (`preset: 'aws-lambda'`) and ensure server code is also built for modern JavaScript (`esnext`), improving performance and compatibility with AWS environments.
 
-## Deploy
+
+# Deploy
 
 Run `npm run build` before you deploy.
 
@@ -128,16 +146,8 @@ By running the following script, the CDK stack will be deployed to AWS.
 npx cdk deploy --all --app="npx tsx stack/index.ts" 
 ```
 
-## Destroy the Stack
 
-If you want to destroy the stack and all its resources (including storage, e.g., access logs), run the following script:
-
-```bash
-npx cdk destroy --all --app="npx tsx stack/index.ts" 
-```
-
-
-# Deploy using GitHub Actions
+## Deploy using GitHub Actions
 
 In your GitHub repository, add a new workflow file under `.github/workflows/deploy.yml` with the following content:
 
@@ -172,6 +182,16 @@ jobs:
 ```
 
 Add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` as repository secrets in GitHub. These should be the access key and secret for an IAM user with permissions to deploy your stack.
+
+
+## Destroy the Stack
+
+If you want to destroy the stack and all its resources (including storage, e.g., access logs), run the following script:
+
+```bash
+npx cdk destroy --all --app="npx tsx stack/index.ts" 
+```
+
 
 
 # Manage Domain with Route53
