@@ -4,7 +4,7 @@ import fse from 'fs-extra/esm';
 import path from 'path';
 import { Aws, Duration } from "aws-cdk-lib";
 import { Construct } from 'constructs';
-import { RetentionDays } from 'aws-cdk-lib/aws-logs';
+import { RetentionDays, LogGroup } from 'aws-cdk-lib/aws-logs';
 import { Function, Runtime, Architecture, Code, Tracing, DockerImageCode, DockerImageFunction, Alias } from 'aws-cdk-lib/aws-lambda';
 import { HttpApi, HttpMethod, DomainName, EndpointType, SecurityPolicy } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -122,7 +122,9 @@ export class ServerConstruct extends Construct {
         ? Duration.seconds(props.serverProps.timeout) 
         : Duration.seconds(10),
       memorySize: props.serverProps?.memorySize || 1792,
-      logRetention: RetentionDays.ONE_MONTH,
+      logGroup: new LogGroup(this, 'ServerFunctionLogGroup', {
+        retention: RetentionDays.ONE_MONTH,
+      }),
       allowPublicSubnet: false,
       tracing: props.serverProps?.tracing ? Tracing.ACTIVE : Tracing.DISABLED,
       environment: {
@@ -154,7 +156,9 @@ export class ServerConstruct extends Construct {
           ? Duration.seconds(props.serverProps.timeout) 
           : Duration.seconds(10),
         memorySize: props.serverProps?.memorySize || 1792,
-        logRetention: RetentionDays.ONE_MONTH,
+        logGroup: new LogGroup(this, 'DockerImageFunctionLogGroup', {
+          retention: RetentionDays.ONE_MONTH,
+        }),
         allowPublicSubnet: false,
         tracing: props.serverProps?.tracing ? Tracing.ACTIVE : Tracing.DISABLED,
         environment: {

@@ -5,7 +5,7 @@ import { Bucket, BlockPublicAccess, ObjectOwnership, BucketEncryption } from 'aw
 import { BucketDeployment, CacheControl, Source, StorageClass } from "aws-cdk-lib/aws-s3-deployment";
 import { Distribution, CachePolicy, SecurityPolicyProtocol, HttpVersion, ResponseHeadersPolicy, HeadersFrameOption, HeadersReferrerPolicy, type BehaviorOptions, AllowedMethods, ViewerProtocolPolicy, CacheCookieBehavior, CacheHeaderBehavior, CacheQueryStringBehavior, CfnOriginAccessControl, CachedMethods, LambdaEdgeEventType, AccessLevel, experimental, IOrigin } from "aws-cdk-lib/aws-cloudfront";
 import { HttpOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
-import { RetentionDays } from 'aws-cdk-lib/aws-logs';
+import { RetentionDays, LogGroup } from 'aws-cdk-lib/aws-logs';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { AaaaRecord, ARecord, HostedZone, type IHostedZone, RecordTarget } from "aws-cdk-lib/aws-route53";
 import { CloudFrontTarget } from "aws-cdk-lib/aws-route53-targets";
@@ -335,7 +335,9 @@ export class ClientConstruct extends Construct {
         CacheControl.maxAge(Duration.days(365)),
         CacheControl.fromString('immutable'),
       ],
-      logRetention: RetentionDays.ONE_DAY,
+      logGroup: new LogGroup(this, 'BucketDeploymentLogGroup', {
+        retention: RetentionDays.ONE_DAY,
+      }),
       metadata: {
         // Store build revision on every asset to allow cleanup of outdated assets
         revision: new Date().toISOString(),
